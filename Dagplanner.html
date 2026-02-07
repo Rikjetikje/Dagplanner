@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dagvuller v3 - Met kalender</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+const BASE_IDEAS = [
+  // Studie-oriëntatie
+  { t: "3 opleidingen/studies online bekijken en vergelijken" },
+  { t: "Zoeken naar open dagen of meeloopdag en er één aanvragen" },
+  { t: "Een beroepentest doen en uitkomsten voor jezelf opschrijven" },
+  { t: "Voor jezelf opschrijven: wat vind ik leuk om te doen?" },
+  { t: "Met iemand praten over studie of werk (ouder/vriend/begeleider)" },
+  { t: "Op YouTube video's kijken over verschillende beroepen" },
+  { t: "Bezoek een hogeschool of universiteit website en rondkijken" },
+  
+  // Sport & beweging
+  { t: "Skaten in de buurt of bij het skatepark" },
+  { t: "Sporten in de sportschool" },
+  { t: "Hardlopen met muziek" },
+  { t: "Wandelen terwijl je een podcast luistert" },
+  { t: "Fietsen naar een plek waar je nog nooit bent geweest" },
+  { t: "Thuis een workout doen (YouTube video)" },
+  { t: "Voetballen of basketballen op een veldje" },
+  
+  // Sociaal
+  { t: "Vrienden appen om later te chillen of te skaten" },
+  { t: "Met een vriend afspreken voor koffie of frisdrank" },
+  { t: "Met het gezin een spel spelen" },
+  { t: "Met je vader of moeder iets leuks doen" },
+  { t: "Samen met iemand koken en eten" },
+  { t: "Online gamen met vrienden" },
+  { t: "Bellen met iemand die je al een tijdje niet hebt gesproken" },
+  
+  // Huishouden & praktisch
+  { t: "Je kamer opruimen en schoonmaken" },
+  { t: "De was doen (sorteren, wassen, ophangen)" },
+  { t: "Stofzuigen in huis" },
+  { t: "Boodschappen doen voor thuis" },
+  { t: "Je bureau/werkplek opruimen en organiseren" },
+  { t: "Kleding uitzoeken die je niet meer draagt en weggeven" },
+  
+  // Gezond eten
+  { t: "Iets gezonds koken voor jezelf" },
+  { t: "Ontbijt, lunch of avondeten voorbereiden voor morgen" },
+  { t: "Een nieuwe gezonde maaltijd uitproberen (recept opzoeken)" },
+  { t: "Fruit snijden voor de komende dagen" },
+  
+  // Creatief & skills
+  { t: "Iets maken: tekening, muziek, video edit of design" },
+  { t: "Een tutorial volgen om iets nieuws te leren" },
+  { t: "Werken aan een project waar je mee bezig bent" },
+  { t: "Je portfolio bijwerken met dingen waar je trots op bent" },
+  { t: "Een instrument beoefenen" },
+  { t: "Foto's maken in de buurt" },
+  
+  // Mindfulness & reflectie  
+  { t: "Voor jezelf opschrijven waar je mee zit of over nadenkt" },
+  { t: "Een boek lezen dat je interessant vindt" },
+  { t: "Muziek luisteren en even niks anders doen" },
+  { t: "Buiten zitten en tot rust komen" },
+  { t: "Een podcast of TED talk luisteren over een interessant onderwerp" },
+  
+  // Werk & geld
+  { t: "Zoeken naar vacatures voor een bijbaan" },
+  { t: "Je CV maken of bijwerken" },
+  { t: "Reageren op een vacature of bedrijf benaderen" },
+  { t: "Informatie zoeken over hoe je geld kunt verdienen" },
+  
+  // Entertainment
+  { t: "Een film of serie kijken die je al lang wilde zien" },
+  { t: "YouTube video's kijken over een onderwerp dat je interesseert" },
+  { t: "Een game spelen waar je zin in hebt" },
+  { t: "Ontdekken van nieuwe muziek of artiesten" },
+];
+
+const SLOTS = [
+  { key: "ochtend", label: "Ochtend", emoji: "🌅", hint: "rustig starten / focus" },
+  { key: "middag", label: "Middag", emoji: "☀️", hint: "grootste blok energie" },
+  { key: "namiddag", label: "Namiddag", emoji: "🌤️", hint: "beweging / praktisch" },
+  { key: "avond", label: "Avond", emoji: "🌙", hint: "sociaal / ontspannen" },
+];
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function pickSuggestions(ideas, slotKey, count = 3) {
+  return shuffle(ideas).slice(0, count);
+}
+
+function formatDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseDate(dateStr) {
+  return new Date(dateStr + 'T00:00:00');
+}
+
+function isSameDay(date1, date2) {
+  return formatDate(date1) === formatDate(date2);
+}
+
+function getWeekDays(date) {
+  const days = [];
+  const current = new Date(date);
+  const dayOfWeek = current.getDay();
+  const monday = new Date(current);
+  monday.setDate(current.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + i);
+    days.push(day);
+  }
+  return days;
+}
+
+const WEEKDAY_NAMES = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+
+function DagvullerV3() {
+  const [currentDate, setCurrentDate] = React.useState(new Date());
+  const [showCopyModal, setShowCopyModal] = React.useState(false);
+  const [copyTargetDate, setCopyTargetDate] = React.useState('');
+
+  // Load all data from localStorage with date keys
+  const getDataForDate = (date) => {
+    const dateKey = formatDate(date);
+    const planKey = `dagvuller_plan_${dateKey}`;
+    
+    const savedPlan = localStorage.getItem(planKey);
+    const plan = savedPlan ? JSON.parse(savedPlan) : SLOTS.map(s => ({ key: s.key, activity: null }));
+    
+    return { plan };
+  };
+
+  // Todos are global (not per day)
+  const getTodos = () => {
+    const saved = localStorage.getItem('dagvuller_todos_global');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return [
+          { text: "Zet je wekker", done: false },
+          { text: "Leg kleding klaar", done: false },
+        ];
+      }
+    }
+    return [
+      { text: "Zet je wekker", done: false },
+      { text: "Leg kleding klaar", done: false },
+    ];
+  };
+
+  // Todo history (deleted/completed todos)
+  const getTodoHistory = () => {
+    const saved = localStorage.getItem('dagvuller_todo_history');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  const [plan, setPlan] = React.useState(() => getDataForDate(currentDate).plan);
+  const [todos, setTodos] = React.useState(() => getTodos());
+  const [todoHistory, setTodoHistory] = React.useState([]);
+  const [todoArchive, setTodoArchive] = React.useState(() => getTodoHistory());
+  const [showHistory, setShowHistory] = React.useState(false);
+
+  // Save to localStorage whenever state changes
+  const currentDateRef = React.useRef(currentDate);
+  
+  React.useEffect(() => {
+    currentDateRef.current = currentDate;
+  }, [currentDate]);
+
+  React.useEffect(() => {
+    const dateKey = formatDate(currentDateRef.current);
+    localStorage.setItem(`dagvuller_plan_${dateKey}`, JSON.stringify(plan));
+  }, [plan]);
+
+  React.useEffect(() => {
+    localStorage.setItem('dagvuller_todos_global', JSON.stringify(todos));
+  }, [todos]);
+
+  React.useEffect(() => {
+    localStorage.setItem('dagvuller_todo_history', JSON.stringify(todoArchive));
+  }, [todoArchive]);
+
+  // Load data when date changes (only plan, not todos)
+  React.useEffect(() => {
+    const data = getDataForDate(currentDate);
+    setPlan(data.plan);
+    setActiveSlot(null);
+    setEditingSlot(null);
+    setEditingTodo(null);
+  }, [currentDate]);
+
+  const allIdeas = BASE_IDEAS;
+
+  const [activeSlot, setActiveSlot] = React.useState(null);
+  const [suggestions, setSuggestions] = React.useState([]);
+  const [editingSlot, setEditingSlot] = React.useState(null);
+  const [editText, setEditText] = React.useState("");
+  const [editingTodo, setEditingTodo] = React.useState(null);
+  const [editTodoText, setEditTodoText] = React.useState("");
+  const [newTodo, setNewTodo] = React.useState("");
+
+  function addToHistory(action, oldState) {
+    setTodoHistory(prev => [...prev.slice(-9), { action, oldState }]);
+  }
+
+  function openSlot(slotKey) {
+    setActiveSlot(slotKey);
+    setSuggestions(pickSuggestions(allIdeas, slotKey, 3));
+    setEditingSlot(null);
+  }
+
+  function chooseSuggestion(idea) {
+    setPlan(prev => prev.map(p => p.key === activeSlot ? { ...p, activity: idea.t } : p));
+    setActiveSlot(null);
+    setSuggestions([]);
+  }
+
+  function refreshSuggestions() {
+    if (activeSlot) {
+      setSuggestions(pickSuggestions(allIdeas, activeSlot, 3));
+    }
+  }
+
+  function startEdit(slotKey) {
+    const slot = plan.find(p => p.key === slotKey);
+    setEditingSlot(slotKey);
+    setEditText(slot?.activity || "");
+    setActiveSlot(null);
+  }
+
+  function saveEdit() {
+    if (editText.trim()) {
+      setPlan(prev => prev.map(p => p.key === editingSlot ? { ...p, activity: editText.trim() } : p));
+    }
+    setEditingSlot(null);
+    setEditText("");
+  }
+
+  function cancelEdit() {
+    setEditingSlot(null);
+    setEditText("");
+  }
+
+  function moveSlot(index, direction) {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= plan.length) return;
+    
+    setPlan(prev => {
+      const next = [...prev];
+      const tempActivity = next[index].activity;
+      next[index].activity = next[newIndex].activity;
+      next[newIndex].activity = tempActivity;
+      return next;
+    });
+  }
+
+  function toggleTodo(index) {
+    addToHistory('toggle', [...todos]);
+    setTodos(prev => prev.map((t, i) => i === index ? { ...t, done: !t.done } : t));
+  }
+
+  function addTodo() {
+    if (newTodo.trim()) {
+      addToHistory('add', [...todos]);
+      setTodos(prev => [...prev, { text: newTodo.trim(), done: false }]);
+      setNewTodo("");
+    }
+  }
+
+  function deleteTodo(index) {
+    const deletedTodo = todos[index];
+    addToHistory('delete', [...todos]);
+    
+    // Archive the deleted todo
+    setTodoArchive(prev => [...prev, {
+      ...deletedTodo,
+      deletedAt: new Date().toISOString(),
+      action: 'deleted'
+    }]);
+    
+    setTodos(prev => prev.filter((_, i) => i !== index));
+  }
+
+  function restoreTodo(archiveIndex) {
+    const todoToRestore = todoArchive[archiveIndex];
+    setTodos(prev => [...prev, { text: todoToRestore.text, done: false }]);
+    setTodoArchive(prev => prev.filter((_, i) => i !== archiveIndex));
+  }
+
+  function clearArchive() {
+    if (window.confirm('Weet je zeker dat je de hele geschiedenis wilt wissen?')) {
+      setTodoArchive([]);
+    }
+  }
+
+  function startEditTodo(index) {
+    setEditingTodo(index);
+    setEditTodoText(todos[index].text);
+  }
+
+  function saveEditTodo() {
+    if (editTodoText.trim()) {
+      addToHistory('edit', [...todos]);
+      setTodos(prev => prev.map((t, i) => i === editingTodo ? { ...t, text: editTodoText.trim() } : t));
+    }
+    setEditingTodo(null);
+    setEditTodoText("");
+  }
+
+  function cancelEditTodo() {
+    setEditingTodo(null);
+    setEditTodoText("");
+  }
+
+  function undoTodo() {
+    if (todoHistory.length > 0) {
+      const last = todoHistory[todoHistory.length - 1];
+      setTodos(last.oldState);
+      setTodoHistory(prev => prev.slice(0, -1));
+    }
+  }
+
+  function copyPlanToDate() {
+    if (!copyTargetDate) return;
+    
+    const targetDateKey = copyTargetDate;
+    const currentPlan = [...plan];
+    
+    localStorage.setItem(`dagvuller_plan_${targetDateKey}`, JSON.stringify(currentPlan));
+    setShowCopyModal(false);
+    setCopyTargetDate('');
+    
+    alert(`Planning gekopieerd naar ${copyTargetDate}!`);
+  }
+
+  function changeWeek(direction) {
+    const newDate = new Date(currentDate);
+    newDate.setDate(newDate.getDate() + (direction * 7));
+    setCurrentDate(newDate);
+  }
+
+  const weekDays = getWeekDays(currentDate);
+  const today = new Date();
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        
+        {/* Header */}
+        <div className="mb-4">
+          <h1 className="text-2xl font-black text-slate-900">Plan je dag</h1>
+          <p className="text-sm text-slate-600 mt-0.5">Check je to-do's en vul je dag in</p>
+        </div>
+
+        {/* Week calendar */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <button
+              onClick={() => changeWeek(-1)}
+              className="p-1 rounded-lg border border-slate-200 text-slate-700 active:bg-slate-50"
+            >
+              ←
+            </button>
+            <div className="text-sm font-semibold">
+              Week {weekDays[0].getDate()} - {weekDays[6].getDate()} {weekDays[0].toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' })}
+            </div>
+            <button
+              onClick={() => changeWeek(1)}
+              className="p-1 rounded-lg border border-slate-200 text-slate-700 active:bg-slate-50"
+            >
+              →
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-7 gap-1">
+            {weekDays.map((day, i) => {
+              const isToday = isSameDay(day, today);
+              const isSelected = isSameDay(day, currentDate);
+              const dayData = getDataForDate(day);
+              const filledSlots = dayData.plan.filter(p => p.activity).length;
+              
+              return (
+                <button
+                  key={i}
+                  onClick={() => setCurrentDate(day)}
+                  className={`p-2 rounded-lg text-center ${
+                    isSelected 
+                      ? 'bg-slate-900 text-white' 
+                      : isToday
+                      ? 'bg-blue-50 border border-blue-200'
+                      : 'bg-slate-50 border border-slate-200'
+                  }`}
+                >
+                  <div className="text-xs font-semibold">{WEEKDAY_NAMES[day.getDay()]}</div>
+                  <div className={`text-lg font-bold ${isSelected ? 'text-white' : ''}`}>{day.getDate()}</div>
+                  <div className="text-xs">{filledSlots}/4</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => setShowCopyModal(true)}
+            className="w-full mt-3 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-semibold"
+          >
+            Kopieer planning naar...
+          </button>
+        </div>
+
+        {/* Copy modal */}
+        {showCopyModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-4 max-w-sm w-full">
+              <h3 className="font-bold mb-3">Kopieer naar welke datum?</h3>
+              <input
+                type="date"
+                value={copyTargetDate}
+                onChange={(e) => setCopyTargetDate(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg mb-3"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={copyPlanToDate}
+                  disabled={!copyTargetDate}
+                  className={`flex-1 px-4 py-2 rounded-lg font-semibold ${
+                    copyTargetDate 
+                      ? 'bg-slate-900 text-white' 
+                      : 'bg-slate-200 text-slate-400'
+                  }`}
+                >
+                  Kopieer
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCopyModal(false);
+                    setCopyTargetDate('');
+                  }}
+                  className="px-4 py-2 bg-slate-100 rounded-lg font-semibold"
+                >
+                  Annuleren
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* History modal */}
+        {showHistory && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-4 max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold">To-do geschiedenis</h3>
+                {todoArchive.length > 0 && (
+                  <button
+                    onClick={clearArchive}
+                    className="text-xs text-red-600 underline"
+                  >
+                    Wis alles
+                  </button>
+                )}
+              </div>
+              
+              <div className="flex-1 overflow-auto">
+                {todoArchive.length === 0 ? (
+                  <div className="text-center text-slate-500 py-8">
+                    Geen verwijderde to-do's
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {[...todoArchive].reverse().map((todo, i) => {
+                      const actualIndex = todoArchive.length - 1 - i;
+                      const deletedDate = new Date(todo.deletedAt);
+                      const dateStr = deletedDate.toLocaleDateString('nl-NL', { 
+                        day: 'numeric', 
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+                      
+                      return (
+                        <div key={actualIndex} className="flex items-start gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold">{todo.text}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              Verwijderd: {dateStr}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => restoreTodo(actualIndex)}
+                            className="px-2 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold shrink-0"
+                          >
+                            Herstel
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowHistory(false)}
+                className="mt-3 w-full px-4 py-2 bg-slate-100 rounded-lg font-semibold"
+              >
+                Sluiten
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* To-do lijst */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-bold text-base">To-do's</h2>
+            <div className="flex gap-1">
+              {todoHistory.length > 0 && (
+                <button
+                  onClick={undoTodo}
+                  className="p-1.5 bg-slate-100 border border-slate-200 rounded-lg"
+                  title="Ongedaan maken"
+                >
+                  ↶
+                </button>
+              )}
+              <button
+                onClick={() => setShowHistory(true)}
+                className="p-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm"
+                title="Geschiedenis"
+              >
+                📜
+              </button>
+            </div>
+          </div>
+          
+          <div className="space-y-1.5 mb-3">
+            {todos.map((todo, i) => {
+              const isEditing = editingTodo === i;
+              
+              return (
+                <div key={i} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                  {!isEditing ? (
+                    <>
+                      <input
+                        type="checkbox"
+                        checked={todo.done}
+                        onChange={() => toggleTodo(i)}
+                        className="w-4 h-4 shrink-0"
+                      />
+                      <div className={`flex-1 text-sm font-semibold ${todo.done ? "line-through text-slate-400" : ""}`}>
+                        {todo.text}
+                      </div>
+                      <div className="flex gap-0.5">
+                        <button
+                          onClick={() => {
+                            if (i > 0) {
+                              addToHistory('reorder', [...todos]);
+                              setTodos(prev => {
+                                const next = [...prev];
+                                [next[i], next[i-1]] = [next[i-1], next[i]];
+                                return next;
+                              });
+                            }
+                          }}
+                          disabled={i === 0}
+                          className={`p-1 rounded border text-xs ${
+                            i === 0 
+                              ? "border-slate-200 text-slate-300" 
+                              : "border-slate-200 text-slate-700 active:bg-slate-100"
+                          }`}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (i < todos.length - 1) {
+                              addToHistory('reorder', [...todos]);
+                              setTodos(prev => {
+                                const next = [...prev];
+                                [next[i], next[i+1]] = [next[i+1], next[i]];
+                                return next;
+                              });
+                            }
+                          }}
+                          disabled={i === todos.length - 1}
+                          className={`p-1 rounded border text-xs ${
+                            i === todos.length - 1
+                              ? "border-slate-200 text-slate-300"
+                              : "border-slate-200 text-slate-700 active:bg-slate-100"
+                          }`}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          onClick={() => startEditTodo(i)}
+                          className="p-1 rounded border border-slate-200 text-slate-700 active:bg-slate-100 text-xs"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => deleteTodo(i)}
+                          className="p-1 rounded border border-slate-200 text-red-600 active:bg-slate-100 text-xs"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        value={editTodoText}
+                        onChange={(e) => setEditTodoText(e.target.value)}
+                        className="flex-1 px-2 py-1.5 border border-slate-300 rounded-lg text-sm"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveEditTodo();
+                          if (e.key === "Escape") cancelEditTodo();
+                        }}
+                      />
+                      <button
+                        onClick={saveEditTodo}
+                        className="px-2 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        onClick={cancelEditTodo}
+                        className="px-2 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold"
+                      >
+                        ✕
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newTodo}
+              onChange={(e) => setNewTodo(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addTodo()}
+              placeholder="Nieuwe to-do..."
+              className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+            />
+            <button
+              onClick={addTodo}
+              className="px-3 py-2 bg-slate-900 text-white rounded-lg font-semibold text-sm"
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        {/* Dagdelen */}
+        <div className="space-y-2 mb-6">
+          {plan.map((slot, index) => {
+            const slotInfo = SLOTS.find(s => s.key === slot.key);
+            const isActive = activeSlot === slot.key;
+            const isEditing = editingSlot === slot.key;
+            const hasActivity = !!slot.activity;
+
+            return (
+              <div key={slot.key} className="bg-white rounded-xl shadow-sm border border-slate-200">
+                <div className="p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{slotInfo.emoji}</span>
+                      <div>
+                        <div className="font-bold text-base">{slotInfo.label}</div>
+                        <div className="text-xs text-slate-500">{slotInfo.hint}</div>
+                      </div>
+                    </div>
+
+                    {hasActivity && !isEditing && !isActive && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => moveSlot(index, -1)}
+                          disabled={index === 0}
+                          className={`p-1.5 rounded-lg border text-xs ${
+                            index === 0 
+                              ? "border-slate-200 text-slate-300" 
+                              : "border-slate-200 text-slate-700 active:bg-slate-50"
+                          }`}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          onClick={() => moveSlot(index, 1)}
+                          disabled={index === plan.length - 1}
+                          className={`p-1.5 rounded-lg border text-xs ${
+                            index === plan.length - 1
+                              ? "border-slate-200 text-slate-300"
+                              : "border-slate-200 text-slate-700 active:bg-slate-50"
+                          }`}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          onClick={() => startEdit(slot.key)}
+                          className="p-1.5 rounded-lg border border-slate-200 text-slate-700 active:bg-slate-50 text-xs"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => openSlot(slot.key)}
+                          className="p-1.5 rounded-lg border border-slate-200 text-slate-700 active:bg-slate-50 text-xs"
+                        >
+                          🔄
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPlan(prev => prev.map(p => p.key === slot.key ? { ...p, activity: null } : p));
+                          }}
+                          className="p-1.5 rounded-lg border border-slate-200 text-red-600 active:bg-slate-50 text-xs"
+                          title="Verwijderen"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {!isEditing ? (
+                    <div>
+                      {hasActivity ? (
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                          <div className="text-sm font-semibold leading-snug">{slot.activity}</div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => openSlot(slot.key)}
+                          className="w-full bg-slate-900 text-white rounded-lg px-4 py-2.5 font-semibold text-sm active:scale-[0.98] transition"
+                        >
+                          Kies activiteit
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        type="text"
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm mb-2"
+                        placeholder="Type je activiteit..."
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveEdit();
+                          if (e.key === "Escape") cancelEdit();
+                        }}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={saveEdit}
+                          className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold"
+                        >
+                          Opslaan
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-semibold"
+                        >
+                          Annuleren
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {isActive && (
+                    <div className="mt-3 pt-3 border-t border-slate-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm font-semibold text-slate-700">Kies een optie:</div>
+                        <button
+                          onClick={refreshSuggestions}
+                          className="text-xs text-slate-600 underline"
+                        >
+                          3 nieuwe opties
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        {suggestions.map((idea, i) => (
+                          <button
+                            key={i}
+                            onClick={() => chooseSuggestion(idea)}
+                            className="w-full text-left p-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 rounded-lg transition"
+                          >
+                            <div className="text-sm font-semibold leading-snug">{idea.t}</div>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => startEdit(slot.key)}
+                          className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold"
+                        >
+                          Eigen tekst
+                        </button>
+                        <button
+                          onClick={() => setActiveSlot(null)}
+                          className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-semibold"
+                        >
+                          Sluiten
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Render the app
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<DagvullerV3 />);
+    </script>
+</body>
+</html>
